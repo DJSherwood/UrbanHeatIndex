@@ -5,11 +5,13 @@ warnings.filterwarnings('ignore')
 # Import common GIS tools
 import numpy as np
 import xarray as xr
+import netCDF4
 import matplotlib.pyplot as plt
 import rioxarray as rio
 import rasterio
 from matplotlib.cm import RdYlGn,jet,RdBu
 import matplotlib.pyplot as plt
+import geopandas as gpd
 
 # Import Planetary Computer tools
 import stackstac
@@ -71,7 +73,7 @@ class PlotData:
         self.data = None
 
     def load_xarray(self, filename):
-        self.data = xr.open_dataset(self.filepath + filename)
+        self.data = xr.open_dataset(self.filepath + filename, engine="netcdf4")
         return
 
     def plot_wrap_data(self,selection):
@@ -111,12 +113,12 @@ class TransformData:
         self.ndwi_median = None
 
     def load_data(self,filename):
-        self.data = xr.DataArray.load(self.filepath + filename)
+        self.data = xr.open_dataset(filename, engine="netcdf4")
         return
 
     def transform(self):
         self.median = self.data.median(dim="time").compute()
-        self.ndvi_median = (self.median.B08 - self.median.B04)/(self.median.BO8 + self.median.B04)
+        self.ndvi_median = (self.median.B08 - self.median.B04)/(self.median.B08 + self.median.B04)
         self.ndbi_median = (self.median.B11 - self.median.B08)/(self.median.B11 + self.median.B08)
         self.ndwi_median = (self.median.B03 - self.median.B08)/(self.median.B03 + self.median.B08)
         return
@@ -136,7 +138,7 @@ class TransformData:
             height
         )
         data_slice.rio.write_crs("epsg:4326", inplace=True)
-        data_slice.rio.write_transform(transfrom=gt, inplace=True)
+        data_slice.rio.write_transform(transform=gt, inplace=True)
         # Create the GeoTIFF output
         with rasterio.open(
                 filename,
@@ -165,9 +167,9 @@ if __name__ == "__main__":
     # print(dd.num_items)
     #
     td = TransformData(filepath='rC:/Users/HG749BX/PycharmProjects/UrbanHeatIndex/')
-    td.load_data('download_01Feb2025.nc')
+    td.load_data(filename=r'./download_01Feb2025.nc')
     td.transform()
-    td.save_geotiff(filename='geotiff_01Feb2025',iselection=7)
+    td.save_geotiff(filename=r'./geotiff_01Feb2025',iselection=7)
 
 
 
