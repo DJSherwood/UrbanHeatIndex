@@ -11,7 +11,7 @@ import rioxarray as rio
 import rasterio
 from matplotlib.cm import RdYlGn,jet,RdBu
 import matplotlib.pyplot as plt
-import geopandas as gpd
+import pandas as pd
 
 # Import Planetary Computer tools
 import stackstac
@@ -111,16 +111,49 @@ class TransformData:
         self.ndvi_median = None
         self.ndbi_median = None
         self.ndwi_median = None
+        self.gdf = None
 
-    def load_data(self,filename):
+    def load_xarray(self,filename):
         self.data = xr.open_dataset(filename, engine="netcdf4")
+        return
+
+    def load_csv(self,filename):
+        self.target = pd.read_csv(filename)
         return
 
     def transform(self):
         self.median = self.data.median(dim="time").compute()
-        self.ndvi_median = (self.median.B08 - self.median.B04)/(self.median.B08 + self.median.B04)
-        self.ndbi_median = (self.median.B11 - self.median.B08)/(self.median.B11 + self.median.B08)
-        self.ndwi_median = (self.median.B03 - self.median.B08)/(self.median.B03 + self.median.B08)
+        self.df = self.median.to_dataframe().reset_index()
+        # join the target data
+
+        # create a bunch of columns of the form
+        # result = ( A - B ) / ( A + B )
+        column_list = ['BO1','B02','B03','B04','B05','B06','B07','B08','B08A','B11','B12']
+        import pandas as pd
+        import itertools
+
+        # Sample DataFrame
+        data = {
+            'A': [1, 2, 3],
+            'B': [4, 5, 6],
+            'C': [7, 8, 9],
+            'D': [10, 11, 12]
+        }
+        df = pd.DataFrame(data)
+
+        # Function to create new columns based on combinations
+        def create_combination_columns(df):
+            columns = df.columns
+            for col1, col2 in itertools.combinations(columns, 2):
+                new_column_name = f'new_column_{col1}_{col2}'
+                df[new_column_name] = (df[col1] - df[col2]) / (df[col1] + df[col2])
+            return df
+
+        # Create new columns
+        df = create_combination_columns(df)
+
+        # Display the updated DataFrame
+        print(df)
         return
 
     def save_geotiff(self, filename, iselection):
@@ -169,8 +202,9 @@ if __name__ == "__main__":
     td = TransformData(filepath='rC:/Users/HG749BX/PycharmProjects/UrbanHeatIndex/')
     td.load_data(filename=r'./download_01Feb2025.nc')
     td.transform()
-    td.save_geotiff(filename=r'./geotiff_01Feb2025',iselection=7)
+    print(td.ndvi_median)
 
+    # td.save_geotiff(filename=r'./geotiff_01Feb2025',iselection=7)
 
 
 
