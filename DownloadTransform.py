@@ -12,7 +12,7 @@ import rasterio
 from matplotlib.cm import RdYlGn,jet,RdBu
 import matplotlib.pyplot as plt
 import pandas as pd
-
+import itertools
 # Import Planetary Computer tools
 import stackstac
 import pystac_client
@@ -107,53 +107,43 @@ class TransformData:
     def __init__(self,filepath):
         self.filepath = filepath
         self.data = None
-        self.median = None
-        self.ndvi_median = None
-        self.ndbi_median = None
-        self.ndwi_median = None
-        self.gdf = None
+        self.features = None
+        self.target = None
 
     def load_xarray(self,filename):
         self.data = xr.open_dataset(filename, engine="netcdf4")
         return
 
-    def load_csv(self,filename):
-        self.target = pd.read_csv(filename)
+    def load_training_data(self):
+        X_data = pd.read_csv('./Training_data_uhi_index 2025-02-04.csv')
+        V_data = pd.read_csv('./Submission_template_UHI2025-v2.csv')
+        self.target = X_data['UHI Index']
+        # drop all but lat, lons
+        X_data.drop(['UHI Index','datetime'],axis=1,inplace=True)
+        V_data.drop('UHI Index',axis=1,inplace=True)
+        # add dataset type label
+        X_data['Type'] = 'Train'
+        V_data['Type'] = 'Predict'
+        # union the two together
+        self.features = pd.concat([X_data, V_data],ignore_index=True)
+        self.features = self.features.reset_index()
         return
 
     def transform(self):
-        self.median = self.data.median(dim="time").compute()
-        self.df = self.median.to_dataframe().reset_index()
+        median = self.data.median(dim="time").compute()
+        df = median.to_dataframe().reset_index()
+        # Rename longitude, latitude to be capitalized
+        df.rename(columns={'latitude':'Latitude','longitude':'Longitude'},inplace=True)
         # join the target data
-
+        self.features = pd.merge(left=df, right=self.features,how='left',on=['Longitude','Latitude'])
         # create a bunch of columns of the form
         # result = ( A - B ) / ( A + B )
-        column_list = ['BO1','B02','B03','B04','B05','B06','B07','B08','B08A','B11','B12']
-        import pandas as pd
-        import itertools
-
-        # Sample DataFrame
-        data = {
-            'A': [1, 2, 3],
-            'B': [4, 5, 6],
-            'C': [7, 8, 9],
-            'D': [10, 11, 12]
-        }
-        df = pd.DataFrame(data)
-
-        # Function to create new columns based on combinations
-        def create_combination_columns(df):
-            columns = df.columns
-            for col1, col2 in itertools.combinations(columns, 2):
-                new_column_name = f'new_column_{col1}_{col2}'
-                df[new_column_name] = (df[col1] - df[col2]) / (df[col1] + df[col2])
-            return df
-
-        # Create new columns
-        df = create_combination_columns(df)
-
-        # Display the updated DataFrame
-        print(df)
+        column_list = ['B01','B02','B03','B04','B05','B06','B07','B08','B8A','B11','B12']
+        for col1, col2 in itertools.combinations(column_list, 2):
+            new_column_name = f'comb_{col1}_{col2}'
+            self.features[new_column_name] = (self.features[col1] - self.features[col2]) / (self.features[col1] + self.features[col2])
+        # write feature data to csv
+        self.features.to_csv(path_or_buf='./feature_data.csv',sep=',',index=False)
         return
 
     def save_geotiff(self, filename, iselection):
@@ -198,12 +188,11 @@ if __name__ == "__main__":
     # dd.get_data()
     # dd.save_xarray('download_01Feb2025.nc')
     # print(dd.num_items)
-    #
     td = TransformData(filepath='rC:/Users/HG749BX/PycharmProjects/UrbanHeatIndex/')
-    td.load_data(filename=r'./download_01Feb2025.nc')
+    td.load_xarray(filename=r'./download_01Feb2025.nc')
+    #print(td.data.median(dim="time").compute().to_dataframe().reset_index().columns)
+    td.load_training_data()
     td.transform()
-    print(td.ndvi_median)
-
     # td.save_geotiff(filename=r'./geotiff_01Feb2025',iselection=7)
 
 
